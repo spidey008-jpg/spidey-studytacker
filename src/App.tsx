@@ -25,9 +25,31 @@ import {
   ChevronDown,
   ChevronUp,
   Send,
+  LogOut,
 } from 'lucide-react';
+import { supabase } from './supabaseClient';
+import Auth from './Auth';
 
 export default function App() {
+  // --- AUTHENTICATION STATE ---
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   // --- STATE MANAGEMENT ---
   const [activeTab, setActiveTab] = useState('dashboard');
 
@@ -332,7 +354,7 @@ export default function App() {
   const pendingAcademic = useMemo(() => {
     return academicItems
       .filter((item) => item.status === 'pending')
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   }, [academicItems]);
 
   const assignmentsList = useMemo(() => {
@@ -360,7 +382,7 @@ export default function App() {
     today.setHours(0, 0, 0, 0);
     return pendingAcademic.filter((item) => {
       const due = new Date(item.dueDate);
-      const diffTime = due - today;
+      const diffTime = due.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays <= 3;
     }).length;
@@ -378,7 +400,7 @@ export default function App() {
     const due = new Date(dueDateStr);
     due.setHours(0, 0, 0, 0);
 
-    const diffTime = due - today;
+    const diffTime = due.getTime() - today.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays < 0)
@@ -408,6 +430,20 @@ export default function App() {
     };
   };
 
+  // If loading authentication status
+  if (authLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-900 text-white font-sans">
+        Loading...
+      </div>
+    );
+  }
+
+  // If user is not logged in, show the Auth screen
+  if (!session) {
+    return <Auth />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 md:pb-8 font-sans selection:bg-indigo-500 selection:text-white">
       {/* --- TOP HEADER --- */}
@@ -419,35 +455,46 @@ export default function App() {
             </div>
             <div>
               <h1 className="font-bold text-lg leading-tight tracking-tight text-slate-900">
-                Study Pulse
+                SpideyTrack
               </h1>
               <p className="text-xs text-slate-500">
-                Academic & Work Companion
+                Academic & Work Companion ({session.user.email})
               </p>
             </div>
           </div>
 
-          {/* Notification Button */}
-          <button
-            onClick={requestNotificationPermission}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-              notifPermission === 'granted'
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
-            }`}
-          >
-            {notifPermission === 'granted' ? (
-              <>
-                <Bell className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Alerts On</span>
-              </>
-            ) : (
-              <>
-                <BellOff className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Enable Alerts</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center space-x-2">
+            {/* Notification Button */}
+            <button
+              onClick={requestNotificationPermission}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                notifPermission === 'granted'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100'
+              }`}
+            >
+              {notifPermission === 'granted' ? (
+                <>
+                  <Bell className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Alerts On</span>
+                </>
+              ) : (
+                <>
+                  <BellOff className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Enable Alerts</span>
+                </>
+              )}
+            </button>
+
+            {/* Logout Button */}
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-all"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out</span>
+            </button>
+          </div>
         </div>
       </header>
 
